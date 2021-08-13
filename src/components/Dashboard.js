@@ -1,9 +1,9 @@
 import React, { Component } from "react";
 import axios from "axios";
-import Panel from "./Panel";
 
 import classnames from "classnames";
 import Loading from "./Loading";
+import Panel from "./Panel";
 
 import {
   getTotalInterviews,
@@ -11,41 +11,48 @@ import {
   getMostPopularDay,
   getInterviewsPerDay,
 } from "helpers/selectors";
+import { setInterview } from "helpers/reducers";
 
 const data = [
   {
     id: 1,
     label: "Total Interviews",
-    value: 6,
+    getValue: getTotalInterviews,
   },
   {
     id: 2,
     label: "Least Popular Time Slot",
-    value: "1pm",
+    getValue: getLeastPopularTimeSlot,
   },
   {
     id: 3,
     label: "Most Popular Day",
-    value: "Wednesday",
+    getValue: getMostPopularDay,
   },
   {
     id: 4,
     label: "Interviews Per Day",
-    value: "2.3",
+    getValue: getInterviewsPerDay,
   },
 ];
 
 class Dashboard extends Component {
-  // constructor(props) {
-  // super(props);
-  state = {
-    loading: true,
-    focused: null,
-    days: [],
-    appointments: {},
-    interviewers: {},
+  constructor(props) {
+    super(props);
+    this.state = {
+      loading: true,
+      focused: null,
+      days: [],
+      appointments: {},
+      interviewers: {},
+    };
+  }
+
+  selectPanel = (id) => {
+    this.setState((previousState) => ({
+      focused: previousState.focused !== null ? null : id,
+    }));
   };
-  // }
 
   componentDidMount() {
     const focused = JSON.parse(localStorage.getItem("focused"));
@@ -65,6 +72,17 @@ class Dashboard extends Component {
         interviewers: interviewers.data,
       });
     });
+
+    this.socket = new WebSocket(process.env.REACT_APP_WEBSOCKET_URL);
+    this.socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (typeof data === "object" && data.type === "SET_INTERVIEW") {
+        this.setState((previousState) =>
+          setInterview(previousState, data.id, data.interview)
+        );
+      }
+    };
   }
 
   componentDidUpdate(previousProps, previousState) {
@@ -72,11 +90,8 @@ class Dashboard extends Component {
       localStorage.setItem("focused", JSON.stringify(this.state.focused));
     }
   }
-
-  selectPanel(id) {
-    this.setState((previousState) => ({
-      focused: previousState.focused !== null ? null : id,
-    }));
+  componentWillUnmount() {
+    this.socket.close();
   }
 
   render() {
@@ -97,8 +112,8 @@ class Dashboard extends Component {
           key={panel.id}
           id={panel.id}
           label={panel.label}
-          value={panel.value}
-          onSelect={(event) => this.selectPanel(panel.id)}
+          value={panel.getValue(this.state)}
+          onSelect={() => this.selectPanel(panel.id)}
         />
       ));
     return <main className={dashboardClasses}>{panels}</main>;
